@@ -94,6 +94,25 @@ func ParseStartupMessage(packet []byte) (*StartupMessage, error) {
 	}, nil
 }
 
+// BuildErrorResponse encodes a PostgreSQL ErrorResponse message.
+func BuildErrorResponse(severity, code, message string) []byte {
+	packet := []byte{'E', 0, 0, 0, 0}
+	packet = append(packet, 'S')
+	packet = append(packet, severity...)
+	packet = append(packet, 0)
+	packet = append(packet, 'C')
+	packet = append(packet, code...)
+	packet = append(packet, 0)
+	packet = append(packet, 'M')
+	packet = append(packet, message...)
+	packet = append(packet, 0, 0)
+
+	// PostgreSQL message length includes the four-byte length field but not
+	// the one-byte message type.
+	binary.BigEndian.PutUint32(packet[1:5], uint32(len(packet)-1))
+	return packet
+}
+
 // RewriteDatabase modifies the 'database' parameter in the packet and re-encodes it with correct length
 func RewriteDatabase(packet []byte, newDatabase string) ([]byte, error) {
 	msg, err := ParseStartupMessage(packet)
