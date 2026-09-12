@@ -117,6 +117,56 @@ func TestReadStartupPacketBounds(t *testing.T) {
 	}
 }
 
+func TestBuildErrorResponse(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name     string
+		severity string
+		code     string
+		message  string
+	}{
+		{
+			name:     "backend unavailable",
+			severity: "FATAL",
+			code:     "08001",
+			message:  "BranchBase: unable to connect to backend PostgreSQL",
+		},
+		{
+			name:     "generic error",
+			severity: "ERROR",
+			code:     "XX000",
+			message:  "unexpected proxy error",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := BuildErrorResponse(tt.severity, tt.code, tt.message)
+			if len(got) < 6 {
+				t.Fatalf("error response too short: %d bytes", len(got))
+			}
+			if got[0] != 'E' {
+				t.Fatalf("message type = %q, want 'E'", got[0])
+			}
+			if length := binary.BigEndian.Uint32(got[1:5]); int(length) != len(got)-1 {
+				t.Fatalf("message length = %d, want %d", length, len(got)-1)
+			}
+
+			wantPayload := []byte{'S'}
+			wantPayload = append(wantPayload, tt.severity...)
+			wantPayload = append(wantPayload, 0, 'C')
+			wantPayload = append(wantPayload, tt.code...)
+			wantPayload = append(wantPayload, 0, 'M')
+			wantPayload = append(wantPayload, tt.message...)
+			wantPayload = append(wantPayload, 0, 0)
+			if !bytes.Equal(got[5:], wantPayload) {
+				t.Errorf("payload = %v, want %v", got[5:], wantPayload)
+			}
+		})
+	}
+}
+
 func TestRewriteDatabase(t *testing.T) {
 	t.Parallel()
 	pkt := buildMockStartupPacket("postgres", "myapp_dev")
