@@ -94,6 +94,14 @@ func (s *Server) handleConnection(clientConn net.Conn) {
 	backendConn, err := net.DialTimeout("tcp", backendAddr, 5*time.Second)
 	if err != nil {
 		log.Printf("[BranchBase Proxy] ❌ Failed to connect to backend %s: %v", backendAddr, err)
+		response := pgwire.BuildErrorResponse(
+			"FATAL",
+			"08001",
+			fmt.Sprintf("BranchBase: unable to connect to backend PostgreSQL at %s: %v", backendAddr, err),
+		)
+		if _, writeErr := clientConn.Write(response); writeErr != nil {
+			log.Printf("[BranchBase Proxy] Error sending backend connection failure to client: %v", writeErr)
+		}
 		return
 	}
 	defer func() {
